@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "SIMPL",
+    "slug": "simpl-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#08192a"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.eustaquiojrf.simplapp"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./adaptive-icon.png",
+        "backgroundColor": "#08192a"
+      },
+      "package": "com.eustaquiojrf.simplapp"
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./icon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#08192a",
+          "image": "./icon.png",
+          "imageWidth": 200
+        }
+      ],
+      "expo-sharing"
+    ],
+    "experiments": {
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "cfa76a74-5bbe-480b-b0d6-21166a9aebfc"
+      }
+    }
+  }
+}
