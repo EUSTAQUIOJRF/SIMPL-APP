@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Image, Share } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Image, Platform } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import ViewShot from "react-native-view-shot";
+import { LinearGradient } from "expo-linear-gradient";
 import { idiomas } from "../i18n/translations";
 import { buscarInformacoesDestino, gerarLinkHotelAfiliado } from "../services/travelApi";
 import { salvarNoHistorico, alternarFavorito, ehFavorito } from "../historico";
@@ -40,48 +42,112 @@ function LinkConfirmarVacina({ destino, paisEmbarque, texto }) {
   );
 }
 
-function montarTextoResumo(dados, t) {
-  const linhas = [
-    `📍 ${dados.destino}`,
-    dados.boasVindas ? `${dados.boasVindas}` : null,
-    "",
-    `📅 ${t.melhorEpoca}: ${dados.melhorEpoca}`,
-    `🌡️ ${dados.temperaturaMediaEpoca}`,
-    dados.custoEstimadoUsd ? `💰 ${t.custoEstimado}: US$ ${dados.custoEstimadoUsd.regular} (${t.nivelRegular})` : null,
-    dados.moedaDestino ? `💱 ${dados.moedaDestino}` : null,
-    "",
-    t.compartilharRodape,
-  ].filter(Boolean);
-  return linhas.join("\n");
-}
-
-function CardResumoCompartilhavel({ dados, t }) {
-  const texto = montarTextoResumo(dados, t);
+// -----------------------------
+// CARD VISUAL COMPARTILHÁVEL (vira imagem de verdade, não texto)
+// -----------------------------
+function CardCompartilhavelImagem({ dados, contexto, t }) {
+  const [formato, setFormato] = useState("post"); // "post" (4:5) | "story" (9:16)
+  const [compartilhando, setCompartilhando] = useState(false);
+  const viewShotRef = useRef(null);
 
   async function handleCompartilhar() {
+    if (!viewShotRef.current) return;
+    setCompartilhando(true);
     try {
-      await Share.share({ message: texto });
-    } catch (e) {}
+      const uri = await viewShotRef.current.capture();
+      const podeCompartilhar = await Sharing.isAvailableAsync();
+      if (podeCompartilhar) {
+        await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: t.cardResumoTitulo });
+      }
+    } catch (e) {
+      // silencioso — se falhar, a pessoa só tenta de novo
+    } finally {
+      setCompartilhando(false);
+    }
   }
 
-  function handleCompartilharWhatsapp() {
-    const url = `whatsapp://send?text=${encodeURIComponent(texto)}`;
-    Linking.openURL(url).catch(() => {
-      Linking.openURL(`https://wa.me/?text=${encodeURIComponent(texto)}`);
-    });
-  }
+  const aspectRatio = formato === "post" ? 4 / 5 : 9 / 16;
 
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={handleCompartilhar} style={styles.cardResumo}>
-      <Text style={styles.tituloResumo}>📤 {t.cardResumoTitulo}</Text>
-      <Text style={styles.textoResumo} numberOfLines={4}>{texto}</Text>
-      <View style={styles.linhaBotoesCompartilhar}>
-        <Text style={styles.dicaToque}>{t.tocarParaCompartilhar}</Text>
-        <TouchableOpacity style={styles.botaoWhatsapp} onPress={handleCompartilharWhatsapp}>
-          <Text style={styles.textoBotaoWhatsapp}>💬 WhatsApp</Text>
+    <View style={styles.blocoCompartilhar}>
+      <Text style={styles.tituloBlocoCompartilhar}>📤 {t.cardResumoTitulo}</Text>
+
+      <View style={styles.linhaFormato}>
+        <TouchableOpacity
+          style={[styles.botaoFormato, formato === "post" && styles.botaoFormatoAtivo]}
+          onPress={() => setFormato("post")}
+        >
+          <Text style={[styles.textoBotaoFormato, formato === "post" && styles.textoBotaoFormatoAtivo]}>
+            Post (4:5)
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.botaoFormato, formato === "story" && styles.botaoFormatoAtivo]}
+          onPress={() => setFormato("story")}
+        >
+          <Text style={[styles.textoBotaoFormato, formato === "story" && styles.textoBotaoFormatoAtivo]}>
+            Story (9:16)
+          </Text>
         </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+
+      <ViewShot ref={viewShotRef} options={{ format: "png", quality: 1 }}>
+        <View style={[styles.cartaoImagem, { aspectRatio }]}>
+          <LinearGradient
+            colors={["#0b1f3a", "#16294f", "#0d1f3d"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          {/* Círculo decorativo */}
+          <View style={styles.circuloDecorativo} />
+          {/* Onda decorativa na base */}
+          <View style={styles.ondaDecorativa} />
+
+          <View style={styles.conteudoCartao}>
+            <Text style={styles.tituloCartao}>{dados.destino}</Text>
+            {dados.boasVindas ? <Text style={styles.subtituloCartao}>{dados.boasVindas}</Text> : null}
+
+            {dados.fotoUrl ? (
+              <Image source={{ uri: dados.fotoUrl }} style={styles.fotoCartao} resizeMode="cover" />
+            ) : (
+              <View style={{ flex: 1 }} />
+            )}
+
+            <View style={styles.rodapeCartao}>
+              <View style={styles.linhaSeparadora} />
+              <View style={styles.linhaInfoCartao}>
+                <Text style={styles.iconeInfoCartao}>📍</Text>
+                <Text style={styles.textoInfoCartao}>{dados.destino}</Text>
+              </View>
+              <View style={styles.linhaInfoCartao}>
+                <Text style={styles.iconeInfoCartao}>🗓️</Text>
+                <Text style={styles.textoInfoCartao}>
+                  {t.melhorEpoca}: <Text style={{ fontWeight: "700" }}>{dados.melhorEpoca}</Text>
+                </Text>
+              </View>
+              {dados.temperaturaMediaEpoca ? (
+                <View style={styles.linhaInfoCartao}>
+                  <Text style={styles.iconeInfoCartao}>🌡️</Text>
+                  <Text style={styles.textoInfoCartao}>{dados.temperaturaMediaEpoca}</Text>
+                </View>
+              ) : null}
+              <View style={styles.marcaCartao}>
+                <Text style={styles.textoMarcaCartao}>✈️ SIMPL — {t.tagline || "seu concierge de viagens"}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </ViewShot>
+
+      <TouchableOpacity style={styles.botaoCompartilharImagem} onPress={handleCompartilhar} disabled={compartilhando}>
+        {compartilhando ? (
+          <ActivityIndicator color="#0f172a" />
+        ) : (
+          <Text style={styles.textoBotaoCompartilharImagem}>{t.tocarParaCompartilhar}</Text>
+        )}
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -242,7 +308,7 @@ export default function ResultsScreen({ route, navigation }) {
           <Text style={styles.tituloDestino}>{dados.destino}</Text>
           {dados.boasVindas ? <Text style={styles.boasVindas}>{dados.boasVindas}</Text> : null}
 
-          <CardResumoCompartilhavel dados={dados} t={t} />
+          <CardCompartilhavelImagem dados={dados} contexto={contexto} t={t} />
 
           <View style={styles.gridInfo}>
             <CardInfo label={`🌤️ ${t.melhorEpoca}`} valor={dados.melhorEpoca} />
@@ -377,21 +443,49 @@ const styles = StyleSheet.create({
   iconeFavorito: { fontSize: 18 },
   conteudo: { padding: 20 },
   tituloDestino: { fontSize: 26, fontWeight: "bold", color: "#ffffff", marginBottom: 4 },
-  boasVindas: { fontSize: 14, color: "#94a3b8", fontStyle: "italic", marginBottom: 16 },
-  cardResumo: {
-    backgroundColor: "#132030",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1.5,
-    borderColor: "#38bdf8",
+  boasVindas: { fontSize: 14, color: "#94a3b8", fontStyle: "italic", marginBottom: 20 },
+
+  // --- Bloco do card compartilhável ---
+  blocoCompartilhar: { marginBottom: 24 },
+  tituloBlocoCompartilhar: { color: "#38bdf8", fontSize: 13, fontWeight: "700", marginBottom: 10 },
+  linhaFormato: { flexDirection: "row", gap: 10, marginBottom: 14 },
+  botaoFormato: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center", backgroundColor: "#1e293b", borderWidth: 1, borderColor: "#334155" },
+  botaoFormatoAtivo: { backgroundColor: "#eab654", borderColor: "#eab654" },
+  textoBotaoFormato: { color: "#94a3b8", fontWeight: "700", fontSize: 13 },
+  textoBotaoFormatoAtivo: { color: "#0f172a" },
+
+  cartaoImagem: { width: "100%", borderRadius: 20, overflow: "hidden", backgroundColor: "#0b1f3a" },
+  circuloDecorativo: { position: "absolute", top: -30, right: -30, width: 160, height: 160, borderRadius: 999, backgroundColor: "rgba(109,140,255,0.18)" },
+  ondaDecorativa: { position: "absolute", bottom: -60, left: -40, width: "160%", height: 160, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.04)", transform: [{ rotate: "-6deg" }] },
+  conteudoCartao: { flex: 1, padding: 24, justifyContent: "space-between" },
+  tituloCartao: {
+    fontSize: 34,
+    fontWeight: "800",
+    fontStyle: "italic",
+    color: "#f8fafc",
+    fontFamily: Platform.select({ ios: "Georgia", android: "serif" }),
+    lineHeight: 40,
   },
-  tituloResumo: { color: "#38bdf8", fontSize: 13, fontWeight: "700", marginBottom: 8 },
-  textoResumo: { color: "#e2e8f0", fontSize: 13, lineHeight: 19 },
-  linhaBotoesCompartilhar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 12 },
-  dicaToque: { color: "#64748b", fontSize: 11, fontStyle: "italic" },
-  botaoWhatsapp: { backgroundColor: "#25D366", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  textoBotaoWhatsapp: { color: "#0f172a", fontSize: 12, fontWeight: "700" },
+  subtituloCartao: {
+    fontSize: 15,
+    fontStyle: "italic",
+    color: "#93a5d1",
+    fontFamily: Platform.select({ ios: "Georgia", android: "serif" }),
+    marginTop: 10,
+    lineHeight: 21,
+  },
+  fotoCartao: { width: "100%", height: 150, borderRadius: 14, marginTop: 18 },
+  rodapeCartao: { marginTop: "auto" },
+  linhaSeparadora: { height: 1, backgroundColor: "rgba(255,255,255,0.15)", marginBottom: 14 },
+  linhaInfoCartao: { flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 8 },
+  iconeInfoCartao: { fontSize: 16 },
+  textoInfoCartao: { color: "#e2e8f0", fontSize: 14 },
+  marcaCartao: { marginTop: 8 },
+  textoMarcaCartao: { color: "#64748b", fontSize: 11, fontWeight: "600" },
+
+  botaoCompartilharImagem: { backgroundColor: "#38bdf8", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 14 },
+  textoBotaoCompartilharImagem: { color: "#0f172a", fontSize: 15, fontWeight: "700" },
+
   gridInfo: { gap: 12, marginBottom: 20 },
   cardInfo: { backgroundColor: "#1e293b", padding: 12, borderRadius: 10, borderWidth: 1, borderColor: "#334155" },
   labelCard: { color: "#38bdf8", fontSize: 12, fontWeight: "bold", marginBottom: 4 },
